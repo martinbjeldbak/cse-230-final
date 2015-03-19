@@ -56,7 +56,7 @@ instance Show (FiniteChan a) where
 
 \end{code}
 
-I use `MVar`, because there is a chance for the list to be empty, otherwise `TVar`s could have been used.
+I use `TVar`, because it is part of the STM module of Haskell, allowing me to use the `atomically` operator to execute actions as if they were isolated.
 
 Next, define an operation for creating a finite channel of a
 particular capacity:
