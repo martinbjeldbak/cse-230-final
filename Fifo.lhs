@@ -49,7 +49,7 @@ change the representation of finite channels from the following
 obviously incorrect one:
 
 \begin{code}
-data FiniteChan a = Chan Int (MVar [a])
+data FiniteChan a = Chan Int (TVar [a])
 
 instance Show (FiniteChan a) where
   show (Chan cap items) = show cap
@@ -63,18 +63,20 @@ particular capacity:
 
 \begin{code}
 newFiniteChan :: Int -> IO (FiniteChan a)
-newFiniteChan capacity = do
-  list <- newMVar  []
-  return (Chan capacity list)
+newFiniteChan capacity = atomically $ do
+  list <- newTVar  []
+  return $ Chan capacity list
 \end{code}
 
 Next, define the operation for reading from the queue:
 
 \begin{code}
 readFiniteChan :: FiniteChan a -> IO a
-readFiniteChan (Chan cap list) = do
-  removed <- modifyMVar list (\xs -> return $ (tail xs, head xs))
-  return removed
+readFiniteChan (Chan cap list) = atomically $ do
+  xs <- readTVar list
+  check $ length xs > 0
+  modifyTVar list (\xs -> tail xs)
+  return $ head xs
 \end{code}
 
 Remember that reads should block in the case where the channel is
@@ -84,10 +86,10 @@ Finally, define the operation for writing to the queue:
 
 \begin{code}
 writeFiniteChan :: FiniteChan a -> a -> IO ()
-writeFiniteChan (Chan cap list) x = do
-  xs <- readMVar list
-  return $ check $ (length xs) < cap -- make sure we can put stuff inside, else wait
-  modifyMVar_ list (\xs -> return $ xs ++ [x])
+writeFiniteChan (Chan cap list) x = atomically $ do
+  xs <- readTVar list
+  check $ (length xs) < cap -- make sure we can put stuff inside, else wait
+  modifyTVar list (\xs -> xs ++ [x])
 
 
 --writeFiniteChan t x = error "TODO"
@@ -105,8 +107,8 @@ of the tests. Uncomment out the second version if you need more information
 to diagnose errors.
 
 \begin{code}
--- dbg s = do return ()
-dbg s = do id <- myThreadId;  putStrLn $ "[" ++ (show id) ++ "] " ++ s
+dbg s = do return ()
+--dbg s = do id <- myThreadId;  putStrLn $ "[" ++ (show id) ++ "] " ++ s
 \end{code}
 
 Various test parameters and utilities follow.
