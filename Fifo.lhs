@@ -64,7 +64,7 @@ particular capacity:
 \begin{code}
 newFiniteChan :: Int -> IO (FiniteChan a)
 newFiniteChan capacity = atomically $ do
-  list <- newTVar  []
+  list <- newTVar []
   return $ Chan capacity list
 \end{code}
 
@@ -88,11 +88,8 @@ Finally, define the operation for writing to the queue:
 writeFiniteChan :: FiniteChan a -> a -> IO ()
 writeFiniteChan (Chan cap list) x = atomically $ do
   xs <- readTVar list
-  check $ (length xs) < cap -- make sure we can put stuff inside, else wait
+  check $ (length xs) < cap
   modifyTVar list (\xs -> xs ++ [x])
-
-
---writeFiniteChan t x = error "TODO"
 \end{code}
 
 Remember that writes should block in the case where the channel is at
