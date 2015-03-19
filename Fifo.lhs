@@ -49,7 +49,7 @@ change the representation of finite channels from the following
 obviously incorrect one:
 
 \begin{code}
-data FiniteChan a = Chan Int (TMVar [a])
+data FiniteChan a = Chan Int (MVar [a])
 
 instance Show (FiniteChan a) where
   show (Chan cap items) = show cap
@@ -64,7 +64,7 @@ particular capacity:
 \begin{code}
 newFiniteChan :: Int -> IO (FiniteChan a)
 newFiniteChan capacity = do
-  list <- newTMVarIO  []
+  list <- newMVar  []
   return (Chan capacity list)
 \end{code}
 
@@ -72,10 +72,9 @@ Next, define the operation for reading from the queue:
 
 \begin{code}
 readFiniteChan :: FiniteChan a -> IO a
-readFiniteChan (Chan cap list) = atomically $ do
-    xs <- takeTMVar list
-    putTMVar list (tail xs)
-    return $ head xs
+readFiniteChan (Chan cap list) = do
+  removed <- modifyMVar list (\xs -> return $ (tail xs, head xs))
+  return removed
 \end{code}
 
 Remember that reads should block in the case where the channel is
@@ -85,11 +84,10 @@ Finally, define the operation for writing to the queue:
 
 \begin{code}
 writeFiniteChan :: FiniteChan a -> a -> IO ()
-writeFiniteChan (Chan cap list) x = atomically $ do
-  xs <- readTMVar list
-  check $ (length xs) < cap -- make sure we can put stuff inside, else wait
-  putTMVar list (xs ++ [x])
- -- modifyMVar_ list (\xs -> return $ xs ++ [x])
+writeFiniteChan (Chan cap list) x = do
+  xs <- readMVar list
+  return $ check $ (length xs) < cap -- make sure we can put stuff inside, else wait
+  modifyMVar_ list (\xs -> return $ xs ++ [x])
 
 
 --writeFiniteChan t x = error "TODO"
