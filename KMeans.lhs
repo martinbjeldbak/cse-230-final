@@ -80,7 +80,7 @@ between two points. Fix the **specification** (not the code) of `distance` so
 that the code is verified by LH:
 
 \begin{code}
-{-@ distance :: n:Nat -> Point -> Point -> Double @-}
+{-@ distance :: n:Nat -> PointN n -> PointN n -> Double @-}
 distance n px py = sqrt $ foldr (+) 0 $ zipWith (\x y -> (x-y)^2) px py
 \end{code}
 
@@ -92,7 +92,7 @@ so that LH verifies the given type signature.
 
 \begin{code}
 {-@ nearest :: k:Nat -> n:Nat -> CenteringKN k n -> PointN n -> CenterK k @-}
-nearest k n centers p = fixme "nearest"
+nearest k n centers p = minKeyMap $ M.map (\x -> distance n p x) centers
 \end{code}
 
 You may want to use the helper `minKeyMap` that computes the key
@@ -101,8 +101,8 @@ with the smallest value in a `Map`:
 \begin{code}
 --- >>> minKeyMap (M.fromList [(0, 12), (1, 23), (2, 7), (3,18)])
 --- 2
-minKeyMap  :: (Ord v) => M.Map k v -> k
-minKeyMap  = minKeyList . M.toList
+minKeyMap :: (Ord v) => M.Map k v -> k
+minKeyMap = minKeyList . M.toList
 
 minKeyList    :: (Ord v) => [(k,v)] -> k
 minKeyList xs = fst $ minimumBy (\x1 x2 -> compare (snd x1) (snd x2)) xs
@@ -131,7 +131,7 @@ which takes two `Cluster` and merges them by adding up their points
 and centers. (Leave the code unmodified).
 
 \begin{code}
-{-@ mergeCluster :: n:Nat -> Cluster -> Cluster -> Cluster @-}
+{-@ mergeCluster :: n:Nat -> ClusterN n -> ClusterN n -> ClusterN n @-}
 mergeCluster n (n1, p1) (n2, p2) = (n1 + n2, zipWith (+) p1 p2)
 \end{code}
 
@@ -146,7 +146,7 @@ dividing each co-ordinate with the cluster size. Fix the **specification**
 of `centroid` so that LH verifies the call to `divide`:
 
 \begin{code}
-{-@ centroid :: n:Nat -> Point -> Int -> Point @-}
+{-@ centroid :: n:Nat -> PointN n -> {p:Nat | p > 0} -> PointN n @-}
 centroid n p sz = map (\x -> x `divide` sz) p
 \end{code}
 
@@ -194,8 +194,8 @@ kmeans1 k n ps cs = normalize newClusters
     fr wp1 wp2    = mergeCluster n wp1 wp2
 \end{code}
 
-Fix the code and specifications above so that LH verifies the the specification for `kmeans` and `kmeans1`
-(i.e. verifies this entire module.)
+Fix the specifications above so that LH verifies the the specification
+for `kmeans` and `kmeans1` (i.e. verifies this entire module.)
 
 **Hint:** If you did the above problems correctly, you should have to do nothing here.
 Otherwise, think about what type `normalize` should have and try to work backwards
