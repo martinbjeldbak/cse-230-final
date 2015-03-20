@@ -138,7 +138,7 @@ for `replicate n x` which should return a `List` `n` copies of
 the value `x`:
 
 \begin{code}
-{-@ replicate :: n:Nat -> a -> {xs:List a | size xs == n } @-}
+{-@ replicate :: n:Nat -> a -> ListN a n @-}
 replicate 0 _ = empty
 replicate n x = add x (replicate (n-1) x)
 
@@ -158,7 +158,7 @@ Fix the specification for `map` such that the assertion in `prop_map`
 is verified by LH. (This will require you to first complete part (a) above.)
 
 \begin{code}
-{-@ map :: (a -> b) -> xs:List a -> {ys:List b | size ys == size xs } @-}
+{-@ map :: (a -> b) -> xs:List a -> ListX b xs @-}
 map f Emp        = Emp
 map f (x :+: xs) = f x :+: map f xs
 
@@ -177,6 +177,7 @@ verified by LH:
 foldr1 op (x :+: xs) = foldr op x xs
 foldr1 op Emp        = die "Cannot call foldr1 with empty list"
 
+{--@ foldr :: (a -> b -> b) -> b -> {xs:List a | size xs > 0 } -> b @-}
 foldr :: (a -> b -> b) -> b -> List a -> b
 foldr _  b Emp        = b
 foldr op b (x :+: xs) = x `op` (foldr op b xs)
@@ -191,7 +192,7 @@ Fix the specification of `zipWith` so that LH verifies:
 + The assert inside `prop_zipwith`.
 
 \begin{code}
-{-@ zipWith :: (a -> b -> c) -> List a -> List b -> List c @-}
+{-@ zipWith :: (a -> b -> c) -> xs:List a -> ListX b xs -> ListX c xs @-}
 zipWith _ Emp Emp               = Emp
 zipWith f (x :+: xs) (y :+: ys) = f x y :+: zipWith f xs ys
 zipWith f _          _          = die  "Bad call to zipWith"
@@ -211,9 +212,33 @@ when you are done, the assert inside `prop_concat`
 is verified by LH. Feel free to write any other code
 or specification (types, measures) that you need.
 
+I added an append function, that takes two lists, and
+adds them together. I wanted to define the `(:++:)`
+function for this, but GHC complained about there being
+no data constructor! Therefore, I just called the function
+`append` instead, based very much off of the Haskell library
+operator `++` from the source [here](http://hackage.haskell.org/package/base-4.7.0.2/docs/src/GHC-List.html#concat).
+
+Likewise, my `concat` is
+based off of the Haskell library `concact` function. Because why
+try to hack something up, when some very, very smart
+Haskell core devs wrote these obviously well working functions?
+
 \begin{code}
-{-@ concat :: List (List a) -> List a @-}
-concat = fixme "concat"
+{-@ append :: xs:List a -> ys:List a ->
+        {zs:List a | size zs == ((size xs) + (size ys)) } @-}
+append Emp        ys = ys
+append (x :+: xs) ys = x :+: (xs `append` ys)
+
+{-@ measure sizeNest :: List (List a) -> Int
+    sizeNest Emp = 0
+    sizeNest ((:+:) x xs) = size x + sizeNest xs
+  @-}
+
+{-@ concat :: xs:List (List a) -> ListN a (sizeNest xs) @-}
+concat Emp = Emp
+concat (x :+: xs) = x `append` concat xs
+--concat = foldr (append) Emp -- this requires refinement types for foldr, which I couldn't get working
 
 prop_concat = lAssert (length (concat xss) == 6)
   where
