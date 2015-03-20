@@ -250,15 +250,15 @@ instance Substitutable Type where
   apply _  TBool           = TBool
   apply su t@(TVbl a)      = Map.findWithDefault t a su 
   apply su (t1 `TArr` t2)  = apply su t1 `TArr` apply su t2
-  apply su (t1 `TCom` t2)  = error "TBD"
-  apply su (TList t)       = error "TBD"
+  apply su (t1 `TCom` t2)  = apply su t1 `TCom` apply su t2
+  apply su (TList t)       = TList $ apply su t
 
-  freeTvars TInt           =  Set.empty
-  freeTvars TBool          =  Set.empty
-  freeTvars (TVbl a)       =  Set.singleton a
-  freeTvars (t1 `TArr` t2) =  freeTvars t1 `Set.union` freeTvars t2
-  freeTvars (t1 `TCom` t2) = error "TBD"
-  freeTvars (TList t)      = error "TBD"
+  freeTvars TInt           = Set.empty
+  freeTvars TBool          = Set.empty
+  freeTvars (TVbl a)       = Set.singleton a
+  freeTvars (t1 `TArr` t2) = freeTvars t1 `Set.union` freeTvars t2
+  freeTvars (t1 `TCom` t2) = freeTvars t1 `Set.union` freeTvars t2
+  freeTvars (TList t)      = freeTvars t
 
 instance Substitutable Scheme where
   apply s (Forall as t)   = Forall as $ apply s' t 
@@ -282,11 +282,13 @@ after         :: Subst -> Subst -> Subst
 su1 `after` su2 = (Map.map (apply su1) su2) `Map.union` su1
 
 
-mgu (l `TCom` r) (l' `TCom` r')  = error "TBD"
-mgu (TList t1) (TList t2)        = error "TBD"
+mgu (l `TCom` r) (l' `TCom` r')  = do s1 <- mgu l l'
+                                      s2 <- mgu (apply s1 r) (apply s1 r')
+                                      return $ s2 `after` s1
+mgu (TList t1) (TList t2)        = mgu t1 t2
 mgu (l `TArr` r) (l' `TArr` r')  = do  s1 <- mgu l l'
                                        s2 <- mgu (apply s1 r) (apply s1 r')
-                                       return (s2 `after` s1)
+                                       return $ s2 `after` s1
 mgu (TVbl a) t                   = varAsgn a t
 mgu t (TVbl a)                   = varAsgn a t
 mgu TInt TInt                    = return empSubst
@@ -330,12 +332,14 @@ ti env (EAbs x e) =
         let env' = env \\ (x, Forall [] tv)
         (s1, t1) <- ti env' e
         return (s1, (apply s1 tv) `TArr` t1)
+
 ti env (EApp e1 e2) =
     do  tv       <- freshTVbl "a"
         (s1, t1) <- ti env e1
         (s2, t2) <- ti (apply s1 env) e2
         s3       <- mgu (apply s2 t1) (TArr t2 tv)
         return (s3 `after` s2 `after` s1, apply s3 tv)
+
 ti env (ELet x e1 e2) =
     do  (s1, t1) <- ti env e1
         let t'   = generalize (apply s1 env) t1
@@ -343,14 +347,29 @@ ti env (ELet x e1 e2) =
         (s2, t2) <- ti (apply s1 env') e2
         return (s2 `after` s1, t2)
 
-ti env (e1 `ECom` e2) = error "TBD"
-ti env (EFst e)       = error "TBD"
-ti env (ESnd e)       = error "TBD"
+ti env (e1 `ECom` e2) =
+    do (s1, t1) <- ti env e1
+       (s2, t2) <- ti (apply s1 env) e2
+       return (s2 `after` s1, apply s2 (t1 `TCom` t2))
+       
+ti env (EFst e) = 
+    do (s1, t1) <- ti env e
+       tv  <- freshTVbl "a"
+       tv' <- freshTVbl "b"
+       s2  <- mgu t1 (tv `TCom` tv')
+       return (s2 `after` s1, apply s2 tv')
+       
+ti env (ESnd e) = 
+    do (s1, t1) <- ti env e
+       tv  <- freshTVbl "a"
+       tv' <- freshTVbl "b"
+       s2  <- mgu t1 (tv `TCom` tv')
+       return (s2 `after` s1, apply s2 tv')
 
 ti env ENil            = error "TBD"
 ti env (e1 `ECons` e2) = error "TBD"
 ti env (EIsNil e)      = error "TBD"
-ti env (EDcons e)      = error "TDB"
+ti env (EDcons e)      = error "TBD"
 
 ti env (ERec x e1 e2)  = error "TBD"
 
@@ -380,11 +399,16 @@ instance Show Type where
   showsPrec _ x = shows (prType x)
 
 prType             ::  Type -> PP.Doc
-prType (TVbl a)    =   prTVbl a
-prType TInt        =   PP.text "Int"
-prType TBool       =   PP.text "Bool"
-prType (TArr t s)  =   prParenType t PP.<+> PP.text "->" PP.<+> prType s
-prType _           =   PP.text "FINAL optional"
+prType (TVbl a)    = prTVbl a
+prType TInt        = PP.text "Int"
+prType TBool       = PP.text "Bool"
+prType (TArr t s)  = prParenType t PP.<+> PP.text "->" PP.<+> prType s
+prType (TCom t s)  = PP.char '('
+                       PP.<+> prParenType t PP.<+>
+                     PP.char ','
+                       PP.<+> prType s PP.<+>
+                     PP.char ')'
+prType _           = PP.text "FINAL optional"
 
 prParenType     ::  Type -> PP.Doc
 prParenType  t  =   case t of
@@ -400,16 +424,23 @@ instance Show Exp where
 prEVbl (EV x)          = PP.text x
 
 prExp                  ::  Exp -> PP.Doc
-prExp (EVbl x)         =   prEVbl x
-prExp (ELit lit)       =   prLit lit
-prExp (ELet x b body)  =   PP.text "let" PP.<+> 
-                           prEVbl x PP.<+> PP.text "=" PP.<+>
-                           prExp b PP.<+> PP.text "in" PP.$$
-                           PP.nest 2 (prExp body)
-prExp (EApp e1 e2)     =   prExp e1 PP.<+> prParenExp e2
-prExp (EAbs x e)       =   PP.char '\\' PP.<+> prEVbl x PP.<+>
-                           PP.text "->" PP.<+>
-                           prExp e
+prExp (EVbl x)         = prEVbl x
+prExp (ELit lit)       = prLit lit
+prExp (ELet x b body)  = PP.text "let" PP.<+> 
+                         prEVbl x PP.<+> PP.text "=" PP.<+>
+                         prExp b PP.<+> PP.text "in" PP.$$
+                         PP.nest 2 (prExp body)
+prExp (EApp e1 e2)     = prExp e1 PP.<+> prParenExp e2
+prExp (EAbs x e)       = PP.char '\\' PP.<+> prEVbl x PP.<+>
+                         PP.text "->" PP.<+>
+                         prExp e
+prExp (ECom e1 e2)       = PP.char '(' PP.<+>
+                             prExp e1 PP.<+>
+                           PP.char ',' PP.<+>
+                             prExp e2 PP.<+>
+                           PP.char ')'
+prExp (EFst e)           = prExp e
+prExp (ESnd e)           = prExp e
 prExp _                =   PP.text "FINAL optional"
                                                                    
 
