@@ -86,6 +86,7 @@ and then, lists whose size equals that of *another* list `Xs`:
 Write down a *refined* type for `length`:
 
 \begin{code}
+{-@ length :: xs:List a -> {v:Nat | v == size xs}  @-}
 length            :: List a -> Int
 length Emp        = 0
 length (x :+: xs) = 1 + length xs
@@ -120,13 +121,13 @@ LiquidHaskell verifies respect the given type signatures:
 
 \begin{code}
 {-@ empty :: ListN a 0 @-}
-empty = fixme "empty"
+empty = Emp
 
 {-@ add :: a -> xs:List a -> ListN a {1 + size xs} @-}
-add x xs = fixme "add"
+add x xs = x :+: xs 
 
 {-@ singleton :: a -> ListN a 1 @-}
-singleton x = fixme "singleton"
+singleton x = x :+: Emp
 \end{code}
 
 (c) Replicating Values
@@ -137,8 +138,10 @@ for `replicate n x` which should return a `List` `n` copies of
 the value `x`:
 
 \begin{code}
-{-@ replicate :: Int -> a -> List a @-}
-replicate = fixme "replicate"
+{-@ replicate :: n:Nat -> a -> {xs:List a | size xs == n } @-}
+replicate 0 _ = empty
+replicate n x = add x (replicate (n-1) x)
+
 \end{code}
 
 When you are done, the following assertion should be verified by LH.
@@ -155,7 +158,7 @@ Fix the specification for `map` such that the assertion in `prop_map`
 is verified by LH. (This will require you to first complete part (a) above.)
 
 \begin{code}
-{-@ map :: (a -> b) -> List a -> List b @-}
+{-@ map :: (a -> b) -> xs:List a -> {ys:List b | size ys == size xs } @-}
 map f Emp        = Emp
 map f (x :+: xs) = f x :+: map f xs
 
@@ -170,7 +173,7 @@ Fix the specification for `foldr1` so that the call to `die` is
 verified by LH:
 
 \begin{code}
-{-@ foldr1 :: (a -> a -> a) -> List a -> a @-}
+{-@ foldr1 :: (a -> a -> a) -> {xs:List a | size xs > 0 } -> a @-}
 foldr1 op (x :+: xs) = foldr op x xs
 foldr1 op Emp        = die "Cannot call foldr1 with empty list"
 
