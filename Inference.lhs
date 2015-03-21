@@ -346,6 +346,7 @@ ti env (ELet x e1 e2) =
         (s2, t2) <- ti (apply s1 env') e2
         return (s2 `after` s1, t2)
 
+-- Tuples
 ti env (e1 `ECom` e2) =
     do (s1, t1) <- ti env e1
        (s2, t2) <- ti (apply s1 env) e2
@@ -353,8 +354,8 @@ ti env (e1 `ECom` e2) =
        
 ti env (EFst e) = 
     do (s1, t1) <- ti env e
-       tvL <- freshTVbl "l"
-       tvR <- freshTVbl "r"
+       tvL <- freshTVbl "l" -- assign LHS fresh type variable
+       tvR <- freshTVbl "r" -- assign RHS fresh type variable
        s2  <- mgu t1 $ TCom tvL tvR
        return (s2 `after` s1, apply s2 tvL)
        
@@ -365,12 +366,33 @@ ti env (ESnd e) =
        s2  <- mgu t1 $ TCom tvL tvR
        return (s2 `after` s1, apply s2 tvR)
 
-ti env ENil            = error "TBD"
-ti env (e1 `ECons` e2) = error "TBD"
-ti env (EIsNil e)      = error "TBD"
-ti env (EDcons e)      = error "TBD"
+-- Lists
+ti env ENil            = 
+    do tv <- freshTVbl "a"
+       return (empSubst, TList tv)
+ti env (e1 `ECons` e2) =
+    do (s1, t1) <- ti env e1
+       (s2, t2) <- ti (apply s1 env) e2
+       s3       <- mgu (TList (apply s2 t1)) t2
+       return (s3 `after` s2 `after` s1, apply s3 t2)
+ti env (EIsNil e)      =
+    do (s1, t1) <- ti env e
+       tv       <- freshTVbl "a"
+       s2       <- mgu t1 (TList tv)
+       return (s2 `after` s1, TBool)
+ti env (EDcons e)      =
+    do (s1, t1) <- ti env e
+       tv       <- freshTVbl "a"
+       s2       <- mgu t1 (TList tv)
+       return (s2 `after` s1, TCom (apply s2 tv) (apply s2 t1))
 
-ti env (ERec x e1 e2)  = error "TBD"
+-- Recursive expressions (can't get this...)
+ti env (ERec x e1 e2)  =
+    do (s1, t1) <- ti env e1
+       tv       <- freshTVbl "a"
+       let env' = env \\ (x, Forall [] tv)
+       (s2, t2) <- ti env' e2
+       return (s2 `after` s1, t2)
 
 ti_top env e =
     do  (s, t) <- ti env e
@@ -407,6 +429,8 @@ prType (TCom t1 t2) = PP.parens $
                         prType t1 PP.<+>
                         PP.char ',' PP.<+>
                         prType t2
+prType (TList t)    = PP.brackets $
+                        prType t
 prType _            = PP.text "FINAL optional (prType missing)"
 
 prParenType     ::  Type -> PP.Doc
@@ -439,6 +463,11 @@ prExp (ECom e1 e2)     = PP.parens $
                              prExp e2
 prExp (EFst e)         = prExp e
 prExp (ESnd e)         = prExp e
+prExp (ENil)           = PP.text "[]"
+prExp (ECons e1 e2)    = PP.parens $
+                           prExp e1 PP.<+>
+                         PP.colon PP.<+>
+                           prParenExp e2
 prExp _                =   PP.text "FINAL optional"
 
 prParenExp    ::  Exp -> PP.Doc
