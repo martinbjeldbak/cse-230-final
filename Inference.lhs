@@ -320,7 +320,6 @@ instantiate (Forall as t) = do as' <- mapM (\ _ -> freshTVbl "a") as
 
 ti ::  (MonadState TIState m, MonadError String m) => 
        TypeEnv -> Exp -> m (Subst, Type)
-
 ti env (ELit (LInt _))  = return (empSubst, TInt)
 ti env (ELit (LBool _)) = return (empSubst, TBool)
 ti (TypeEnv env) (EVbl x) = 
@@ -398,21 +397,21 @@ prTVbl (TV a) = PP.text a
 instance Show Type where
   showsPrec _ x = shows (prType x)
 
-prType             ::  Type -> PP.Doc
-prType (TVbl a)    = prTVbl a
-prType TInt        = PP.text "Int"
-prType TBool       = PP.text "Bool"
-prType (TArr t s)  = prParenType t PP.<+> PP.text "->" PP.<+> prType s
-prType (TCom t s)  = PP.char '('
-                       PP.<+> prParenType t PP.<+>
-                     PP.char ','
-                       PP.<+> prType s PP.<+>
-                     PP.char ')'
-prType _           = PP.text "FINAL optional"
+prType              ::  Type -> PP.Doc
+prType (TVbl a)     = prTVbl a
+prType TInt         = PP.text "Int"
+prType TBool        = PP.text "Bool"
+prType (TArr t s)   = prParenType t PP.<+> PP.text "->"
+                      PP.<+> prType s
+prType (TCom t1 t2) = PP.parens $
+                        prType t1 PP.<+>
+                        PP.char ',' PP.<+>
+                        prType t2
+prType _            = PP.text "FINAL optional (prType missing)"
 
 prParenType     ::  Type -> PP.Doc
 prParenType  t  =   case t of
-                      TArr _ _  -> PP.parens (prType t)
+                      TArr _ _  -> PP.parens $ prType t
                       _         -> prType t
 
 instance Show EVbl where
@@ -434,15 +433,13 @@ prExp (EApp e1 e2)     = prExp e1 PP.<+> prParenExp e2
 prExp (EAbs x e)       = PP.char '\\' PP.<+> prEVbl x PP.<+>
                          PP.text "->" PP.<+>
                          prExp e
-prExp (ECom e1 e2)       = PP.char '(' PP.<+>
+prExp (ECom e1 e2)     = PP.parens $
                              prExp e1 PP.<+>
-                           PP.char ',' PP.<+>
-                             prExp e2 PP.<+>
-                           PP.char ')'
-prExp (EFst e)           = prExp e
-prExp (ESnd e)           = prExp e
+                           PP.comma PP.<+>
+                             prExp e2
+prExp (EFst e)         = prExp e
+prExp (ESnd e)         = prExp e
 prExp _                =   PP.text "FINAL optional"
-                                                                   
 
 prParenExp    ::  Exp -> PP.Doc
 prParenExp t  =   case t of
