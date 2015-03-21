@@ -349,21 +349,21 @@ ti env (ELet x e1 e2) =
 ti env (e1 `ECom` e2) =
     do (s1, t1) <- ti env e1
        (s2, t2) <- ti (apply s1 env) e2
-       return (s2 `after` s1, apply s2 (t1 `TCom` t2))
+       return (s2 `after` s1, apply s2 (TCom t1 t2))
        
 ti env (EFst e) = 
     do (s1, t1) <- ti env e
-       tv  <- freshTVbl "a"
-       tv' <- freshTVbl "b"
-       s2  <- mgu t1 (tv `TCom` tv')
-       return (s2 `after` s1, apply s2 tv')
+       tvL <- freshTVbl "l"
+       tvR <- freshTVbl "r"
+       s2  <- mgu t1 $ TCom tvL tvR
+       return (s2 `after` s1, apply s2 tvL)
        
 ti env (ESnd e) = 
     do (s1, t1) <- ti env e
-       tv  <- freshTVbl "a"
-       tv' <- freshTVbl "b"
-       s2  <- mgu t1 (tv `TCom` tv')
-       return (s2 `after` s1, apply s2 tv')
+       tvL <- freshTVbl "a"
+       tvR <- freshTVbl "b"
+       s2  <- mgu t1 $ TCom tvL tvR
+       return (s2 `after` s1, apply s2 tvR)
 
 ti env ENil            = error "TBD"
 ti env (e1 `ECons` e2) = error "TBD"
